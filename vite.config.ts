@@ -32,6 +32,16 @@ export default defineConfig({
   plugins: [
     vue(),
     vueJsx(),
+    
+    legacy({
+      modernTargets: [
+        'safari >= 15',
+        'ios >= 15',
+      ],
+      modernPolyfills: true,
+      renderLegacyChunks: false,
+    }),
+    
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'favicon-dark.svg'],
