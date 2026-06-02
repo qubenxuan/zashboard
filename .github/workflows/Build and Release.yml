@@ -1,0 +1,83 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --no-frozen-lockfile
+
+      - name: Build default version
+        run: |
+          rm -rf dist
+          pnpm run build
+          cd dist
+          zip -r ../zashboard-dist.zip .
+
+      - name: Build CDN fonts version
+        run: |
+          rm -rf dist
+          pnpm run build:cdn-fonts
+          cd dist
+          zip -r ../zashboard-dist-cdn-fonts.zip .
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: latest-build
+        run: |
+          set -e
+
+          RELEASE_NOTES="Automatic zashboard build from commit ${GITHUB_SHA}.
+
+          Download:
+          - Default: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/zashboard-dist.zip
+          - CDN fonts: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/zashboard-dist-cdn-fonts.zip"
+
+          git tag -f "${TAG_NAME}" "${GITHUB_SHA}"
+          git push origin "${TAG_NAME}" --force
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" \
+              zashboard-dist.zip \
+              zashboard-dist-cdn-fonts.zip \
+              --clobber
+
+            gh release edit "${TAG_NAME}" \
+              --title "Latest zashboard build" \
+              --notes "${RELEASE_NOTES}" \
+              --latest
+          else
+            gh release create "${TAG_NAME}" \
+              zashboard-dist.zip \
+              zashboard-dist-cdn-fonts.zip \
+              --title "Latest zashboard build" \
+              --notes "${RELEASE_NOTES}" \
+              --target "${GITHUB_SHA}" \
+              --latest
+          fi
+
+      - name: Show download links
+        env:
+          TAG_NAME: latest-build
+        run: |
+          echo "### Download links" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Default: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/zashboard-dist.zip" >> "$GITHUB_STEP_SUMMARY"
+          echo "- CDN fonts: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/zashboard-dist-cdn-fonts.zip" >> "$GITHUB_STEP_SUMMARY"
